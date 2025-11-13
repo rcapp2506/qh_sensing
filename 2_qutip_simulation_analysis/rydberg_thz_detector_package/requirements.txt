@@ -1,0 +1,23 @@
+# Avalanche THz Detector - Python Dependencies
+# 
+# Install all with: pip install -r requirements.txt
+
+# Core dependencies (required)
+numpy>=1.20.0
+matplotlib>=3.3.0
+scipy>=1.6.0
+
+# QuTiP (recommended for fast simulations)
+qutip>=4.7.0
+
+# Optional: for Jupyter notebooks
+# jupyter>=1.0.0
+# ipython>=7.0.0
+
+# Optional: for performance profiling
+# line_profiler>=3.0.0
+# memory_profiler>=0.60.0
+
+# Optional: for parallel computing (advanced)
+# joblib>=1.0.0
+# multiprocess>=0.70.0
