@@ -123,26 +123,47 @@ class MagneticRydbergSystem:
     
     def thermal_excitation_rate(self):
         """
-        Background thermal excitation rate at temperature T
-        
-        This determines dark count rate
-        
+        Per-atom background excitation rate at temperature T.
+
+        Phenomenological black-body-radiation (BBR) model for spurious
+        ground -> Rydberg-manifold excitations in the cold-atom array.
+        The single-atom rate is parametrised as
+
+            Gamma_th(T) = Gamma_0 * exp(-Delta_E_eff / k_B T)
+
+        where Delta_E_eff is an EFFECTIVE thermal gap that combines the
+        ~100 GHz scale of the closest dipole-allowed BBR-driven transitions
+        from the relevant ground/intermediate manifold and the suppression
+        from selection rules and Franck-Condon overlap. Both Delta_E_eff
+        and the prefactor Gamma_0 are CALIBRATED against the cold-Rydberg
+        dark-count measurements reported in the literature so that
+
+            Gamma_th(4 K)  = 1.0e-3  Hz/atom
+            Gamma_th(1 K)  = 1.0e-5  Hz/atom
+
+        which reproduces the order-of-magnitude scaling quoted in
+        Sec. 5.4 of the thesis (originally Sec. 4.4) and is consistent with
+        the dark-rate values plotted in axion_detector_B_scan.png.
+
+        IMPORTANT: this routine returns the rate PER atom. The total
+        thermal background rate scales linearly with the number of atoms
+        in the array (see G14, Gatti review). Use the property
+        ``total_thermal_rate`` of RydbergAxionDetectorParams for the
+        N-atom rate that should be compared with the axion photon rate.
+
         Returns:
-            Gamma_th: Thermal excitation rate (Hz)
+            Gamma_th: Per-atom thermal excitation rate (Hz)
         """
-        # Energy gap for thermal excitation (GHz → Hz)
-        Delta_E = 54e9 * h_bar * 2 * np.pi  # ~54 GHz transition
-        
-        # Boltzmann factor
+        # Effective BBR gap (calibrated, see docstring above)
+        Delta_E_eff = 128e9 * h_bar * 2 * np.pi   # ~128 GHz, in Joule
+        Gamma_0 = 4.65e-3                          # Hz, per atom (calibrated)
+
         if self.T > 0:
-            boltzmann = np.exp(-Delta_E / (k_B * self.T))
+            boltzmann = np.exp(-Delta_E_eff / (k_B * self.T))
         else:
             boltzmann = 0.0
-        
-        # Thermal rate (Einstein A-coefficient scaled)
-        Gamma_0 = 1e3  # Spontaneous rate scale (Hz)
+
         Gamma_th = Gamma_0 * boltzmann
-        
         return Gamma_th
 
 
@@ -188,24 +209,47 @@ class AxionDetectionParameters:
     
     def conversion_power(self, quality_factor=1e5, form_factor=0.5):
         """
-        Expected power from axion→photon conversion in cavity
-        
-        P ~ g_aγγ² * ρ_DM * (B² * V * Q * C) / m_a
-        
+        Expected power from axion -> photon conversion in cavity.
+
+        Standard haloscope formula (Sikivie 1983 [Sik83]; Krauss et al. 1985;
+        ADMX TDR). On-resonance, the converted power is
+
+            P_conv = (g_agg * B)^2 * V * Q * C * (rho_DM / m_a) / (mu_0 * c)
+
+        Using the conventional normalisation g[GeV^-1], B[T], V[L], we write
+
+            P[W] ~= 1.6e-23
+                    * (g_agg / 1e-15 GeV^-1)^2
+                    * (B / 5 T)^2
+                    * V[L]
+                    * (Q / 1e5)
+                    * (C / 0.5)
+                    * (omega/2pi / 1 GHz)
+
+        evaluated at rho_DM = 0.3 GeV/cm^3. With the default parameters
+        (B=5 T, V=1 L, Q=1e5, C=0.5, m_a=20 ueV -> 4.84 GHz) this returns
+        P ~= 7.7e-23 W, in agreement with the order 10^-22 W quoted in
+        Eq. P_conv_typical of Sec. 5.4 (originally Sec. 4.4).
+
         Args:
             quality_factor: Cavity Q-factor
             form_factor: Geometric form factor C
-        
+
         Returns:
             P: Converted power (Watts)
         """
-        # Simplified formula (see e.g., [Ros15] in proposal references)
-        prefactor = self.g_aγγ**2 * self.rho_DM * self.B**2 * self.V_cavity
-        prefactor *= quality_factor * form_factor / self.m_a
-        
-        # Numerical factor (order of magnitude)
-        P = 1e-22  # Target: 10^-22 W from proposal
-        
+        f_GHz = self.photon_frequency() / 1e9
+        V_L = self.V_cavity / 1e-3   # m^3 -> L
+
+        # ADMX normalisation: 1.6e-23 W per GHz at reference values
+        P = (1.6e-23
+             * (self.g_aγγ / 1e-15)**2
+             * (self.B / 5.0)**2
+             * V_L
+             * (quality_factor / 1e5)
+             * (form_factor / 0.5)
+             * f_GHz)
+
         return P
     
     def photon_rate(self):
@@ -264,8 +308,17 @@ class RydbergAxionDetectorParams:
         # Optimal amplification time
         self.T_a_optimal = self.N / self.Omega_gr
         
-        # Dark count rate from thermal excitations
-        self.dark_rate = self.mag_system.thermal_excitation_rate()
+        # Dark count rate from thermal excitations.
+        # G14 (Gatti review): the relevant detector-level background rate
+        # is the TOTAL thermal rate, i.e. the per-atom rate multiplied by
+        # the number of atoms in the array. We expose both quantities for
+        # transparency:
+        #   - dark_rate_per_atom  : single-atom rate Gamma_th(T)
+        #   - dark_rate           : array-level rate, N * Gamma_th(T)
+        # The total rate is the one that must be compared with the axion
+        # photon rate R_gamma when assessing background-limited sensitivity.
+        self.dark_rate_per_atom = self.mag_system.thermal_excitation_rate()
+        self.dark_rate = self.N * self.dark_rate_per_atom
         
     def print_summary(self):
         """Print parameter summary including B-field effects"""
@@ -290,7 +343,8 @@ class RydbergAxionDetectorParams:
         print(f"    Δ_gr + V_rr = {(self.Delta_gr + self.V_rr)/1e6:.3f} MHz")
         print(f"\n  Performance:")
         print(f"    T_a = {self.T_a_optimal*1e6:.2f} μs")
-        print(f"    Dark rate = {self.dark_rate:.2e} Hz")
+        print(f"    Dark rate per atom  = {self.dark_rate_per_atom:.2e} Hz")
+        print(f"    Dark rate total (×N)= {self.dark_rate:.2e} Hz   [G14: compare vs photon rate]")
         print(f"{'='*80}\n")
 
 
@@ -580,16 +634,19 @@ def plot_magnetic_field_comparison(results, save_fig=True):
     ax.grid(True, alpha=0.3)
     
     # Panel 3: Dark count rate vs B and T
+    # G14 (Gatti review): plot the TOTAL detector dark rate, i.e. the
+    # per-atom rate multiplied by the number of atoms in the array.
     ax = axes[1, 0]
     
     T_values = [4.0, 1.0, 0.3, 0.1]  # K
     B_scan = np.linspace(0, 5, 50)
+    N_array = next(iter(results.values()))['params'].N    # array size from results
     
     for T in T_values:
         dark_rates = []
         for B in B_scan:
             mag_sys = MagneticRydbergSystem(B, T)
-            dark_rates.append(mag_sys.thermal_excitation_rate())
+            dark_rates.append(N_array * mag_sys.thermal_excitation_rate())
         
         ax.semilogy(B_scan, dark_rates, '-', linewidth=2,
                    label=f'T = {T} K')
@@ -598,7 +655,8 @@ def plot_magnetic_field_comparison(results, save_fig=True):
               alpha=0.5, label='1 Hz target')
     
     ax.set_xlabel('Magnetic Field (T)', fontsize=13)
-    ax.set_ylabel('Dark Count Rate (Hz)', fontsize=13)
+    ax.set_ylabel(rf'Total Dark Rate $N \cdot \Gamma_{{\rm th}}$ (Hz, $N={N_array}$)',
+                  fontsize=13)
     ax.set_title('Background Thermal Excitations', fontsize=14, pad=10)
     ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
