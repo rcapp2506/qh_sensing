@@ -320,9 +320,31 @@ class RydbergAxionDetectorParams:
         mixing_factor = 1.0 - 0.05 * (B_field / 1.0)**2
         self.Omega_gr = self.Omega_gr_0 * max(mixing_factor, 0.7)
         
-        # Facilitation condition (modified by Zeeman shift)
-        zeeman_correction = self.mag_system.zeeman_r - self.mag_system.zeeman_e
-        self.Delta_gr = -self.V_rr + zeeman_correction
+        # Facilitation condition with auto-detuned laser.
+        #
+        # Physically the laser is locked (e.g. via a PDH lock on a
+        # Zeeman-tracked atomic or cavity reference) to follow the
+        # field-shifted |g> -> |r> transition and is offset by V_rr(B).
+        # In the rotating frame of that auto-detuned laser, the
+        # single-atom detuning therefore reduces to
+        #
+        #     Delta_gr(B) = -V_rr(B)                                  (*)
+        #
+        # so that the facilitation condition Delta_gr + V_rr = 0 is
+        # exactly preserved at every B by construction. The
+        # single-atom Zeeman shifts (zeeman_r, zeeman_e in
+        # MagneticRydbergSystem) are absorbed into the laser
+        # frequency and do not enter the rotating-frame Hamiltonian.
+        #
+        # Note: the previous version of this code added (zeeman_r -
+        # zeeman_e) to Delta_gr, which was incorrect on two counts.
+        # First, in a rotating-frame description the laser frequency
+        # is the zero of the detuning axis; if the laser tracks the
+        # shifted transition, the Zeeman shift is by definition not
+        # present in Delta_gr. Second, zeeman_r/zeeman_e were
+        # computed in Hz whereas V_rr is built in rad/s, so the
+        # addition mixed units. Both defects are removed here.
+        self.Delta_gr = -self.V_rr
         
         # Optimal amplification time
         self.T_a_optimal = self.N / self.Omega_gr
@@ -352,14 +374,16 @@ class RydbergAxionDetectorParams:
         print(f"  Field-modified interactions:")
         print(f"    V_rr(B)/(2π) = {self.V_rr/(2*np.pi)/1e6:.3f} MHz")
         print(f"    Suppression: {100*(1-self.V_rr/self.V_rr_0):.1f}%")
-        print(f"\n  Zeeman shifts:")
+        print(f"\n  Zeeman shifts (single-atom, informational only --")
+        print(f"  absorbed into the laser frequency by the auto-detuning,")
+        print(f"  not entering the rotating-frame Hamiltonian):")
         print(f"    |r⟩ shift = {self.mag_system.zeeman_r/1e6:.3f} MHz")
         print(f"    |e⟩ shift = {self.mag_system.zeeman_e/1e6:.3f} MHz")
-        print(f"\n  Laser parameters:")
+        print(f"\n  Laser parameters (rotating frame):")
         print(f"    Ω_gr/(2π) = {self.Omega_gr/(2*np.pi)/1e6:.3f} MHz")
         print(f"    Δ_gr/(2π) = {self.Delta_gr/(2*np.pi)/1e6:.3f} MHz")
-        print(f"  Facilitation check:")
-        print(f"    Δ_gr + V_rr = {(self.Delta_gr + self.V_rr)/1e6:.3f} MHz")
+        print(f"  Facilitation check (must be ~ 0):")
+        print(f"    (Δ_gr + V_rr)/(2π) = {(self.Delta_gr + self.V_rr)/(2*np.pi)/1e6:.3e} MHz")
         print(f"\n  Performance:")
         print(f"    T_a = {self.T_a_optimal*1e6:.2f} μs")
         print(f"    Dark rate per atom  = {self.dark_rate_per_atom:.2e} Hz")
