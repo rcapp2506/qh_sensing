@@ -89,8 +89,12 @@ class MagneticRydbergSystem:
         g_S = 2.0
         self.zeeman_r = mu_B * g_S * self.B / (2 * np.pi * h_bar)  # Convert to Hz
         
-        # Zeeman shift for |e⟩ state (P-state, m_J = ±1/2, ±3/2)
-        g_P = 1.5  # Averaged
+        # Zeeman shift for |e⟩ state (P-state, P_{3/2}, m_J = ±1/2, ±3/2)
+        # g_J(P_{3/2}) = 4/3 from the Landé formula
+        #   g_J = 1 + [J(J+1) + S(S+1) - L(L+1)] / [2 J(J+1)]
+        # with L = 1, S = 1/2, J = 3/2, consistent with eq:lande_g of the
+        # manuscript. The previous value (1.5) had no physical justification.
+        g_P = 4.0 / 3.0
         self.zeeman_e = mu_B * g_P * self.B / (2 * np.pi * h_bar)
         
     def modified_interaction_strength(self, V_0, distance_au=1.0):
