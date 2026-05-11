@@ -119,11 +119,6 @@ ax = axes[0]
 ax.semilogx(N_arr, eta_abs_res, 'g-', linewidth=2.8,
             label=r'$\eta_{\rm eff}(N) = \eta_{\rm abs}(N)$')
 ax.axhline(1.0, color='gray', linestyle=':', alpha=0.4)
-ax.axhline(0.5, color='gray', linestyle=':', alpha=0.4)
-ax.axvline(N_half_res, color='green', linestyle='--', alpha=0.4, linewidth=1.5)
-ax.text(N_half_res*1.5, 0.05,
-        rf'$N_{{1/2}} \approx {N_half_res:.0e}$',
-        color='green', fontsize=10)
 
 # Roberto's working point at N=11
 N_work = 11
@@ -138,11 +133,16 @@ ax.annotate(rf'$N\!=\!11$ (this work)' + '\n' + rf'$\eta_{{\rm eff}}\approx{eta_
 ax.set_xlabel(r'Number of atoms $N$')
 ax.set_ylabel(r'Single-photon absorption $\eta_{\rm eff}$', color='g')
 ax.tick_params(axis='y', labelcolor='g')
-ax.set_title(r'(a) Resonant regime $\Delta=0$: monotonic, no detuning penalty', pad=10)
+ax.set_title(r'Resonant regime $\Delta=0$: monotonic, no detuning penalty', pad=10)
 ax.set_ylim([0, 1.15])
 ax.set_xlim([1, 1e9])
 ax.grid(True, alpha=0.3, which='both')
 ax.legend(loc='center right', framealpha=0.9)
+# Panel label (a)
+ax.text(0.04, 0.94, '(a)', transform=ax.transAxes,
+        fontsize=18, fontweight='bold', va='top', ha='left',
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
+                  edgecolor='black', alpha=0.85), zorder=10)
 
 # Secondary axis: kappa_eff/(2pi) (Purcell broadening)
 ax2 = ax.twinx()
@@ -168,11 +168,16 @@ for r, label, color in zip(results_disp, Delta_labels, Delta_colors):
 
 ax.set_xlabel(r'Number of atoms $N$')
 ax.set_ylabel(r'Effective efficiency $\eta_{\rm eff}(N) = \eta_{\rm abs}\,L$')
-ax.set_title(r'(b) Dispersive regime $\Delta \neq 0$: $\delta\omega_c\!=\!Ng^2\!/\Delta$ detunes cavity, non-monotonic', pad=10)
+ax.set_title(r'Dispersive regime $\Delta \neq 0$: $\delta\omega_c\!=\!Ng^2\!/\Delta$ detunes cavity, non-monotonic', pad=10)
 ax.set_ylim([1e-12, 2])
 ax.set_xlim([1, 1e9])
 ax.grid(True, alpha=0.3, which='both')
 ax.legend(loc='lower center', framealpha=0.9, fontsize=9, ncol=1)
+# Panel label (b)
+ax.text(0.04, 0.94, '(b)', transform=ax.transAxes,
+        fontsize=18, fontweight='bold', va='top', ha='left',
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
+                  edgecolor='black', alpha=0.85), zorder=10)
 
 # Interpretive annotation
 ax.text(0.98, 0.97,
