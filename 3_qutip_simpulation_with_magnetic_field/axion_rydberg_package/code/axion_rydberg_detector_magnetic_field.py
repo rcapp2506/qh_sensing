@@ -95,30 +95,49 @@ class MagneticRydbergSystem:
         
     def modified_interaction_strength(self, V_0, distance_au=1.0):
         """
-        Magnetic field modifies Rydberg-Rydberg interactions
-        due to state mixing
-        
+        Phenomenological model of the Rydberg-Rydberg interaction strength
+        as a function of magnetic field.
+
         Args:
             V_0: Zero-field interaction strength (Hz)
-            distance_au: Interatomic distance in atomic units
-        
+            distance_au: Interatomic distance in atomic units (unused; kept
+                for backward compatibility with earlier call signatures)
+
         Returns:
             V_modified: Field-modified interaction (Hz)
+
+        Notes
+        -----
+        For Rydberg atoms in n ~ 60-70 nS states at B ~ 1-5 T we are deep in
+        the diamagnetic regime (B >> 2/n^4 in atomic units), where the bare
+        |nS, m_j> single-atom states acquire significant admixtures of higher
+        angular-momentum components. A first-principles treatment requires
+        full diagonalisation of the pair-state Hamiltonian in a basis that
+        includes the diamagnetic term (see e.g. Ma, Anderson, Raithel,
+        Phys. Rev. A 95, 061802 (2017); Walker & Saffman, Phys. Rev. A 77,
+        032723 (2008) for the related zero-field analysis of Zeeman-split
+        pair states). Such a calculation is outside the scope of the present
+        avalanche-dynamics model.
+
+        In its place we adopt a simple Lorentzian soft-saturation ansatz
+
+            V_rr(B) = V_rr(0) / [1 + (B/B_c)^2]
+
+        with characteristic scale B_c = 5 T chosen so that the interaction
+        is reduced by a factor of two at the strongest field considered in
+        this work. The model is monotonic, smooth, has no free cutoffs or
+        clamps, and reduces in the small-field limit to the perturbative
+        quadratic suppression V_rr(B) ~ V_rr(0)[1 - (B/B_c)^2 + O(B^4)]
+        expected from second-order perturbation theory. The downstream
+        results are insensitive to the precise functional form because the
+        laser auto-detuning maintains the facilitation condition
+        Delta_gr(B) + V_rr(B) ~ 0 at every B by construction; the only
+        observable consequence is a mild rescaling of the avalanche
+        timescale T_a through V_rr(B) entering as the dominant energy scale
+        of the pair-state dynamics.
         """
-        # Empirical scaling from literature:
-        # V(B) ≈ V_0 * [1 + α*(B/B_0)^2] where B_0 ~ 1 T
-        
-        B_0 = 1.0  # Tesla (characteristic scale)
-        alpha = 0.1  # Mixing coefficient (weak mixing regime)
-        
-        if self.B < 0.5:
-            # Low field: minimal modification
-            scaling = 1.0
-        else:
-            # High field: quadratic suppression from state mixing
-            scaling = 1.0 - alpha * (self.B / B_0)**2
-            scaling = max(scaling, 0.5)  # Don't suppress below 50%
-        
+        B_c = 5.0  # Tesla; calibrated so V_rr(5T) = 0.5 * V_rr(0)
+        scaling = 1.0 / (1.0 + (self.B / B_c) ** 2)
         return V_0 * scaling
     
     def thermal_excitation_rate(self):
