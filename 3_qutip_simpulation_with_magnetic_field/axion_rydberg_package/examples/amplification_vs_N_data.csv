@@ -1,0 +1,7 @@
+N,A_mean,mean_click_eta_0.70,P_detect_eta_0.70,3sigma_eta_0.70,mean_click_eta_0.95,P_detect_eta_0.95,3sigma_eta_0.95,source
+11,5.3282,3.7298,0.976002,no,5.0618,0.993666,no,simulated
+13,6.1643,4.3150,0.986633,no,5.8560,0.997137,no,simulated
+15,6.7130,4.6991,0.990897,no,6.3773,0.998300,YES,simulated
+17,7.0505,4.9353,0.992812,no,6.6980,0.998767,YES,simulated
+19,7.7429,5.4200,0.995573,no,7.3557,0.999361,YES,extrapolated
+21,8.3144,5.8201,0.997033,no,7.8987,0.999629,YES,extrapolated
