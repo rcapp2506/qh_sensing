@@ -201,7 +201,7 @@ class AxionDetectionParameters:
     Based on haloscope cavity experiments (ADMX, HAYSTAC, etc.)
     """
     
-    def __init__(self, axion_mass_ueV=20.0, B_field=5.0, cavity_volume=1.0):
+    def __init__(self, axion_mass_ueV=234.6, B_field=5.0, cavity_volume=1.0):
         """
         Args:
             axion_mass_ueV: Axion mass (μeV)
@@ -213,10 +213,19 @@ class AxionDetectionParameters:
         self.V_cavity = cavity_volume * 1e-3  # Convert to m³
         
         # Axion-photon coupling (QCD axion benchmark)
-        self.g_aγγ = 1e-15  # GeV^-1 (conservative estimate)
+        # QCD-band benchmark coupling at the working mass (KSVZ by default);
+        # use g_benchmark(m, "DFSZ") for the DFSZ value.
+        self.g_aγγ = self.g_benchmark(axion_mass_ueV, "KSVZ")  # GeV^-1
         
         # Local dark matter density
-        self.rho_DM = 0.3e9 * 1.602176634e-19 / c**2  # 0.3 GeV/cm³ in SI
+        # Local DM density: 0.45 GeV/cm^3, the reporting convention adopted
+        # by the haloscope collaborations (ADMX, HAYSTAC, ORGAN) so that
+        # sensitivities are directly comparable across experiments.
+        # (WIMP direct-detection convention is 0.3; results scale linearly.)
+        self.rho_DM = 0.45e9 * 1.602176634e-19 / 1e-6 / c**2  # kg/m^3
+        # (0.45 GeV/cm^3 -> J/m^3 via e/1e-6, then /c^2. NOTE: the previous
+        #  line omitted the cm^3 -> m^3 factor 1e6; the error was masked by
+        #  the hard-coded power anchor that this revision removes.)
         
     def photon_frequency(self):
         """
@@ -230,51 +239,73 @@ class AxionDetectionParameters:
         omega = self.m_a * c**2 / h_bar
         return omega / (2 * np.pi)
     
-    def conversion_power(self, quality_factor=1e5, form_factor=0.5):
+    @staticmethod
+    def g_benchmark(axion_mass_ueV, model="KSVZ"):
+        """QCD-band axion-photon coupling benchmark, g_agg [GeV^-1].
+
+        g_agg = (alpha / 2 pi f_a) |E/N - 1.92|, with the QCD relation
+        m_a = 5.691 ueV x (1e12 GeV / f_a).  E/N = 0 (KSVZ), 8/3 (DFSZ).
         """
-        Expected power from axion -> photon conversion in cavity.
+        import scipy.constants as _k
+        fa_GeV = 5.691e12 / axion_mass_ueV
+        EN = 0.0 if model.upper() == "KSVZ" else 8.0/3.0
+        return _k.alpha / (2*np.pi*fa_GeV) * abs(EN - 1.92)
 
-        Standard haloscope formula (Sikivie 1983 [Sik83]; Krauss et al. 1985;
-        ADMX TDR). On-resonance, the converted power is
+    def conversion_power(self, quality_factor=1e5, form_factor=0.5,
+                         beta_factor=0.5, g_agg=None):
+        """
+        Expected on-resonance axion -> photon conversion power (Watts),
+        computed FROM FIRST PRINCIPLES with the standard haloscope formula
+        (Sikivie 1983; HAYSTAC cavity paper, arXiv:2006.01248, Eq. 1):
 
-            P_conv = (g_agg * B)^2 * V * Q * C * (rho_DM / m_a) / (mu_0 * c)
+            P = [g^2 hbar^3 c^3 rho_a / m_a^2]
+                x [(1/mu_0) B^2 omega_c V C Q_L] x beta_factor
 
-        Using the conventional normalisation g[GeV^-1], B[T], V[L], we write
+        with beta_factor = beta/(1+beta) the antenna-coupling fraction;
+        the default 0.5 corresponds to critical coupling (beta = 1), the
+        convention of Eq. (axion_power) of the thesis. Everything in SI.
 
-            P[W] ~= 1.6e-23
-                    * (g_agg / 1e-15 GeV^-1)^2
-                    * (B / 5 T)^2
-                    * V[L]
-                    * (Q / 1e5)
-                    * (C / 0.5)
-                    * (omega/2pi / 1 GHz)
+        VALIDATION: with the HAYSTAC typical parameters (B = 9 T,
+        V = 1.5 L, C = 0.5, Q_L = 1e4, beta = 2, KSVZ coupling at
+        ~5 GHz) this routine returns ~5e-24 W, matching the published
+        HAYSTAC expected signal power (P_S ~ 5e-24 W at 24 ueV KSVZ).
+        Run `python -m ... --selftest` or call validate_against_haystac().
 
-        evaluated at rho_DM = 0.3 GeV/cm^3. With the default parameters
-        (B=5 T, V=1 L, Q=1e5, C=0.5, m_a=20 ueV -> 4.84 GHz) this returns
-        P ~= 7.7e-23 W, in agreement with the order 10^-22 W quoted in
-        Eq. P_conv_typical of Sec. 5.4 (originally Sec. 4.4).
+        NOTE: the previous implementation used a hard-coded anchor
+        (1.6e-23 W/GHz at g = 1e-15 GeV^-1) that overestimated the
+        first-principles result by a factor ~5e2; it has been removed.
 
         Args:
-            quality_factor: Cavity Q-factor
-            form_factor: Geometric form factor C
+            quality_factor: loaded cavity Q_L
+            form_factor:    geometric form factor C
+            beta_factor:    beta/(1+beta); 0.5 = critical coupling
+            g_agg:          coupling in GeV^-1 (default: self.g_aγγ)
 
         Returns:
-            P: Converted power (Watts)
+            P: converted power (W)
         """
-        f_GHz = self.photon_frequency() / 1e9
-        V_L = self.V_cavity / 1e-3   # m^3 -> L
-
-        # ADMX normalisation: 1.6e-23 W per GHz at reference values
-        P = (1.6e-23
-             * (self.g_aγγ / 1e-15)**2
-             * (self.B / 5.0)**2
-             * V_L
-             * (quality_factor / 1e5)
-             * (form_factor / 0.5)
-             * f_GHz)
-
+        e_C = 1.602176634e-19
+        mu_0 = 4e-7 * np.pi * 0.9999999999  # SI (exact enough)
+        g = self.g_aγγ if g_agg is None else g_agg      # GeV^-1
+        g_SI = g / (1e9 * e_C)                            # J^-1
+        ma_J = self.m_a * c**2                            # J (mass-energy)
+        rho  = self.rho_DM * c**2                         # J/m^3
+        w_c  = ma_J / h_bar                               # rad/s, on resonance
+        P = (g_SI**2 * h_bar**3 * c**3 * rho / ma_J**2) \
+            * (1.0/mu_0) * self.B**2 * w_c * self.V_cavity \
+            * form_factor * quality_factor * beta_factor
         return P
-    
+
+    def validate_against_haystac(self):
+        """Assert the formula reproduces the published HAYSTAC benchmark."""
+        ref = AxionDetectionParameters(axion_mass_ueV=20.68, B_field=9.0,
+                                       cavity_volume=1.5)
+        ref.g_aγγ = self.g_benchmark(20.68, "KSVZ")
+        P = ref.conversion_power(quality_factor=1e4, form_factor=0.5,
+                                 beta_factor=2.0/3.0)
+        assert 2e-24 < P < 9e-24, f"HAYSTAC validation failed: P = {P:.2e} W"
+        return P
+
     def photon_rate(self):
         """
         Photon arrival rate
